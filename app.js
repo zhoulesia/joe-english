@@ -1,30 +1,70 @@
-let C=[],S=JSON.parse(localStorage.getItem("joeV2")||'{"d":0,"s":0,"done":[],"tries":0,"stars":0,"react":0}'),last="";const $=x=>document.getElementById(x);fetch("course.json").then(r=>r.json()).then(x=>{C=x;render()}).catch(()=>{$("en").textContent="请用本地服务器或部署后的网址打开 V2。"});function save(){localStorage.setItem("joeV2",JSON.stringify(S))}function talk(t,cb){
+let C=[],S=JSON.parse(localStorage.getItem("joeV2")||'{"d":0,"s":0,"done":[],"tries":0,"stars":0,"react":0}'),last="";const $=x=>document.getElementById(x);fetch("course.json").then(r=>r.json()).then(x=>{C=x;render()}).catch(()=>{$("en").textContent="请用本地服务器或部署后的网址打开 V2。"});function save(){localStorage.setItem("joeV2",JSON.stringify(S))}let currentAudio=null;
+
+async function talk(t,cb){
   last=t;
-  if(!("speechSynthesis" in window)) return;
-  speechSynthesis.cancel();
+
+  // Stop anything already playing.
+  try{
+    if(currentAudio){
+      currentAudio.pause();
+      currentAudio=null;
+    }
+    if("speechSynthesis" in window) speechSynthesis.cancel();
+  }catch(e){}
+
+  // Primary path: fixed AI voice from our secure server.
+  try{
+    const res=await fetch("/api/tts",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({text:t})
+    });
+
+    if(!res.ok) throw new Error("TTS server returned "+res.status);
+
+    const blob=await res.blob();
+    const url=URL.createObjectURL(blob);
+    const audio=new Audio(url);
+    currentAudio=audio;
+    audio.playbackRate=1.0;
+
+    audio.onended=()=>{
+      URL.revokeObjectURL(url);
+      currentAudio=null;
+      if(cb) cb();
+    };
+    audio.onerror=()=>{
+      URL.revokeObjectURL(url);
+      currentAudio=null;
+      fallbackTalk(t,cb);
+    };
+
+    await audio.play();
+    return;
+  }catch(err){
+    console.warn("AI voice unavailable; using browser fallback.",err);
+    fallbackTalk(t,cb);
+  }
+}
+
+function fallbackTalk(t,cb){
+  if(!("speechSynthesis" in window)){
+    if(cb) cb();
+    return;
+  }
   let u=new SpeechSynthesisUtterance(t);
   u.lang="en-GB";
   u.rate=.72;
   u.pitch=1.02;
-  u.volume=1;
 
   const voices=speechSynthesis.getVoices();
-  const preferred=[
-    "Serena",
-    "Daniel",
-    "Sonia",
-    "Google UK English Female",
-    "Google UK English Male",
-    "Microsoft Sonia Online (Natural) - English (United Kingdom)",
-    "Microsoft Ryan Online (Natural) - English (United Kingdom)"
-  ];
+  const preferred=["Serena","Sonia","Google UK English Female","Daniel"];
   let voice=null;
   for(const name of preferred){
     voice=voices.find(v=>v.name===name && /^en-GB/i.test(v.lang));
     if(voice) break;
   }
   if(!voice) voice=voices.find(v=>/^en-GB/i.test(v.lang));
-  if(!voice) voice=voices.find(v=>/^en/i.test(v.lang));
   if(voice) u.voice=voice;
   if(cb) u.onend=cb;
   speechSynthesis.speak(u);
