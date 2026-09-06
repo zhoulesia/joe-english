@@ -1,0 +1,11 @@
+{
+  "name": "Joe English · Family Week",
+  "short_name": "Joe English",
+  "description": "Joe 的 3 岁英语听说互动学习 App",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#fff6e5",
+  "theme_color": "#ff8b3d",
+  "orientation": "portrait-primary"
+}
